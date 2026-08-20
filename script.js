@@ -177,6 +177,8 @@ function renderCollections() {
     const filtered = filterCollections(collections);
 
     if (filtered.length === 0) {
+        // Destroy the box: clear every card so nothing lingers when empty.
+        grid.innerHTML = '';
         grid.hidden = true;
         emptyState.hidden = false;
         if (collections.length === 0) {
