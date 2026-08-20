@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="我的收藏展览 · 论坛 - 一起分享收藏故事">
+    <meta name="theme-color" content="#667eea">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💬</text></svg>">
+    <title>论坛 · 我的收藏展览</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="forum.css">
+</head>
+<body>
+    <header>
+        <h1>💬 收藏论坛</h1>
+        <p>一起聊聊你的收藏故事</p>
+        <nav class="site-nav" aria-label="主导航">
+            <a href="index.html" class="nav-link">🎨 收藏展</a>
+            <a href="forum.html" class="nav-link active">💬 论坛</a>
+        </nav>
+    </header>
+
+    <main>
+        <!-- 配置缺失提示 -->
+        <div class="panel config-banner" id="configBanner" hidden>
+            <p>⚠️ 尚未配置 Supabase。请按 <code>README.md</code> 说明设置
+               <code>config.js</code> 中的 URL 与 anon key（或在 Zeabur 环境变量中配置）。</p>
+        </div>
+
+        <!-- 状态提示条 -->
+        <div class="toast" id="toast" hidden></div>
+
+        <!-- ============ 帖子列表视图 ============ -->
+        <section id="viewList" aria-label="帖子列表">
+            <div class="panel forum-toolbar">
+                <div class="filter-buttons forum-filters" id="categoryFilters" role="tablist" aria-label="帖子分类">
+                    <button class="filter-btn active" data-category="all" role="tab" aria-selected="true">全部</button>
+                    <button class="filter-btn" data-category="general" role="tab" aria-selected="false">闲聊</button>
+                    <button class="filter-btn" data-category="share" role="tab" aria-selected="false">晒收藏</button>
+                    <button class="filter-btn" data-category="help" role="tab" aria-selected="false">求鉴定</button>
+                    <button class="filter-btn" data-category="trade" role="tab" aria-selected="false">交流</button>
+                    <button class="filter-btn" data-category="other" role="tab" aria-selected="false">其他</button>
+                </div>
+                <button type="button" class="btn-new-topic" id="newTopicBtn">✏️ 发新帖</button>
+            </div>
+
+            <div class="topic-list" id="topicList" aria-live="polite">
+                <div class="loading-hint">加载中…</div>
+            </div>
+        </section>
+
+        <!-- ============ 发帖视图 ============ -->
+        <section id="viewNew" class="panel" hidden aria-labelledby="newTopicTitle">
+            <div class="panel-head">
+                <h2 id="newTopicTitle">发布新帖</h2>
+                <button type="button" class="btn-cancel-edit" id="backFromNew">← 返回列表</button>
+            </div>
+            <form id="topicForm" class="forum-form">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="topicNickname">昵称</label>
+                        <input type="text" id="topicNickname" placeholder="你的昵称" required maxlength="30">
+                    </div>
+                    <div class="form-group">
+                        <label for="topicCategory">分类</label>
+                        <select id="topicCategory">
+                            <option value="general">闲聊</option>
+                            <option value="share">晒收藏</option>
+                            <option value="help">求鉴定</option>
+                            <option value="trade">交流</option>
+                            <option value="other">其他</option>
+                        </select>
+                    </div>
+                    <div class="form-group form-group-full">
+                        <label for="topicTitle">标题</label>
+                        <input type="text" id="topicTitle" placeholder="一句话说清主题" required maxlength="120">
+                    </div>
+                    <div class="form-group form-group-full">
+                        <label for="topicContent">内容</label>
+                        <textarea id="topicContent" rows="5" placeholder="分享你的收藏故事、疑问或心得…" required maxlength="5000"></textarea>
+                    </div>
+                </div>
+                <button type="submit" class="btn-submit">发布</button>
+            </form>
+        </section>
+
+        <!-- ============ 帖子详情视图 ============ -->
+        <section id="viewTopic" hidden aria-label="帖子详情">
+            <div class="panel topic-detail" id="topicDetail"></div>
+
+            <div class="panel reply-section">
+                <div class="panel-head">
+                    <h2>回复（<span id="replyCount">0</span>）</h2>
+                    <button type="button" class="btn-cancel-edit" id="backFromTopic">← 返回列表</button>
+                </div>
+                <div class="reply-list" id="replyList" aria-live="polite">
+                    <div class="loading-hint">加载中…</div>
+                </div>
+                <form id="replyForm" class="forum-form reply-form">
+                    <div class="form-grid">
+                        <div class="form-group form-group-full">
+                            <label for="replyNickname">昵称</label>
+                            <input type="text" id="replyNickname" placeholder="你的昵称" required maxlength="30">
+                        </div>
+                        <div class="form-group form-group-full">
+                            <label for="replyContent">回复内容</label>
+                            <textarea id="replyContent" rows="3" placeholder="友善交流，理性讨论…" required maxlength="2000"></textarea>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn-submit">回复</button>
+                </form>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <p>© 2024 我的收藏展览 | 论坛由 Supabase 驱动</p>
+    </footer>
+
+    <script src="config.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="forum.js" defer></script>
+</body>
+</html>
