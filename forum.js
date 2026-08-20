@@ -22,14 +22,22 @@
         replyImages: []
     };
 
-    /* ---------- 图片处理（压缩 + 上传 Supabase Storage） ---------- */
+    /* ---------- 图片处理（双档压缩 + 上传 Supabase Storage） ---------- */
 
     const MAX_IMAGES_TOPIC = 6;
     const MAX_IMAGES_REPLY = 4;
     const MAX_RAW_FILE = 15 * 1024 * 1024;   // 15 MB raw cap
-    const MAX_EDGE = 1600;                    // downscale long edge (px)
-    const JPEG_QUALITY = 0.82;
-    const MAX_GIF_KEEP = 3 * 1024 * 1024;
+    const FULL_EDGE = 1600;                   // 高清图长边 (px)
+    const THUMB_EDGE = 320;                   // 缩略图长边 (px)
+    const WEBP_QUALITY = 0.8;                 // 高清图质量
+    const THUMB_QUALITY = 0.72;               // 缩略图质量
+    const MAX_GIF_ANIMATED = 3 * 1024 * 1024; // 小于该体积的 GIF 保留动画，否则转静态
+
+    /** 判断浏览器是否支持 WebP 编码（导出时决定格式）。 */
+    function supportsWebP() {
+        const c = document.createElement('canvas');
+        return c.toDataURL('image/webp').startsWith('data:image/webp');
+    }
 
     function readFileAsDataURL(file) {
         return new Promise((resolve, reject) => {
@@ -49,7 +57,27 @@
         });
     }
 
-    /** 压缩图片为 dataURL（GIF 小文件原样保留动画）。 */
+    /** 画布压缩：等比缩到 targetEdge，导出 WebP（不支持时退回 JPEG）。 */
+    function canvasToCompressed(img, targetEdge, quality, isPng) {
+        const scale = Math.min(1, targetEdge / Math.max(img.naturalWidth, img.naturalHeight));
+        const w = Math.max(1, Math.round(img.naturalWidth * scale));
+        const h = Math.max(1, Math.round(img.naturalHeight * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (isPng) { // PNG 透明背景保留
+            ctx.clearRect(0, 0, w, h);
+        } else { // 其它格式填白底，避免透明区域变黑
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, w, h);
+        }
+        ctx.drawImage(img, 0, 0, w, h);
+        if (supportsWebP()) return canvas.toDataURL('image/webp', quality);
+        return canvas.toDataURL('image/jpeg', quality);
+    }
+
+    /** 压缩图片为双档 dataURL。返回 {file, fullDataUrl, thumbDataUrl} 或 null。 */
     async function processImageFile(file) {
         if (!file.type.startsWith('image/')) {
             showToast('请选择图片文件（JPG / PNG / WebP / GIF）', true);
@@ -59,21 +87,30 @@
             showToast('图片过大（超过 15 MB）', true);
             return null;
         }
-        if (file.type === 'image/gif' && file.size <= MAX_GIF_KEEP) {
-            return await readFileAsDataURL(file);
-        }
+        const isGif = file.type === 'image/gif';
+        const isPng = file.type === 'image/png';
         const raw = await readFileAsDataURL(file);
+
+        // GIF：小体积保留动画（原样上传），大体积转静态 WebP 省空间
+        if (isGif && file.size <= MAX_GIF_ANIMATED) {
+            const img = await loadImage(raw);
+            return {
+                file,
+                fullDataUrl: raw,                       // 保留动画原图
+                thumbDataUrl: canvasToCompressed(img, THUMB_EDGE, THUMB_QUALITY, false),
+                ext: 'gif',
+                animated: true
+            };
+        }
+
         const img = await loadImage(raw);
-        const scale = Math.min(1, MAX_EDGE / Math.max(img.naturalWidth, img.naturalHeight));
-        const w = Math.max(1, Math.round(img.naturalWidth * scale));
-        const h = Math.max(1, Math.round(img.naturalHeight * scale));
-        const canvas = document.createElement('canvas');
-        canvas.width = w;
-        canvas.height = h;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, w, h);
-        const format = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
-        return canvas.toDataURL(format, JPEG_QUALITY);
+        return {
+            file,
+            fullDataUrl: canvasToCompressed(img, FULL_EDGE, WEBP_QUALITY, isPng),
+            thumbDataUrl: canvasToCompressed(img, THUMB_EDGE, THUMB_QUALITY, isPng),
+            ext: supportsWebP() ? 'webp' : 'jpg',
+            animated: false
+        };
     }
 
     function dataUrlToBlob(dataUrl) {
@@ -85,28 +122,47 @@
         return new Blob([arr], { type: mime });
     }
 
-    /** 把暂存图片上传到 Supabase Storage，返回公开 URL 数组。 */
+    /** 存储矩阵：每张图上传两档（高清 + 缩略图），返回高清公开 URL 数组。 */
     async function uploadImages(list) {
         const urls = [];
         for (const item of list) {
-            const ext = (item.file.type === 'image/png') ? 'png'
-                : (item.file.type === 'image/gif') ? 'gif' : 'jpg';
-            const name = Date.now() + '-' + Math.random().toString(36).slice(2, 10) + '.' + ext;
-            const blob = dataUrlToBlob(item.dataUrl);
-            const { error } = await state.supabase.storage
+            const base = Date.now() + '-' + Math.random().toString(36).slice(2, 10);
+            const fullName = 'forum/' + base + '.' + item.ext;
+            const thumbName = 'forum/' + base + '_thumb.' + (item.animated ? 'webp' : item.ext);
+            const fullBlob = dataUrlToBlob(item.fullDataUrl);
+            const thumbBlob = dataUrlToBlob(item.thumbDataUrl);
+
+            const upFull = await state.supabase.storage
                 .from('forum-images')
-                .upload('forum/' + name, blob, {
-                    contentType: blob.type,
-                    cacheControl: '3600',
+                .upload(fullName, fullBlob, {
+                    contentType: fullBlob.type,
+                    cacheControl: '31536000',
                     upsert: false
                 });
-            if (error) throw error;
+            if (upFull.error) throw upFull.error;
+
+            const upThumb = await state.supabase.storage
+                .from('forum-images')
+                .upload(thumbName, thumbBlob, {
+                    contentType: thumbBlob.type,
+                    cacheControl: '31536000',
+                    upsert: false
+                });
+            if (upThumb.error) throw upThumb.error;
+
             const { data: pub } = state.supabase.storage
                 .from('forum-images')
-                .getPublicUrl('forum/' + name);
+                .getPublicUrl(fullName);
             urls.push(pub.publicUrl);
         }
         return urls;
+    }
+
+    /** 由高清 URL 推导缩略图 URL（无缩略图时回退原图）。 */
+    function thumbUrlOf(fullUrl) {
+        const m = fullUrl.match(/^(.*forum\/)([^/]+)\.([a-z0-9]+)$/i);
+        if (!m) return fullUrl;
+        return m[1] + m[2] + '_thumb.' + m[3];
     }
 
     /** 图片选择（多选）+ 预览渲染。 */
@@ -120,7 +176,7 @@
             const list = state[stateKey];
             preview.innerHTML = list.map((item, i) =>
                 '<div class="image-preview-item" data-index="' + i + '">' +
-                    '<img src="' + item.dataUrl + '" alt="预览图">' +
+                    '<img src="' + item.fullDataUrl + '" alt="预览图">' +
                     '<button type="button" class="image-preview-remove" data-index="' + i + '" aria-label="移除图片">✕</button>' +
                 '</div>'
             ).join('');
@@ -151,8 +207,8 @@
                     break;
                 }
                 try {
-                    const dataUrl = await processImageFile(file);
-                    if (dataUrl) state[stateKey].push({ file, dataUrl });
+                    const item = await processImageFile(file);
+                    if (item) state[stateKey].push(item);
                 } catch (err) {
                     showToast(err.message || '图片处理失败', true);
                 }
@@ -171,8 +227,8 @@
             for (const file of files) {
                 if (state[stateKey].length >= maxCount) { showToast('最多 ' + maxCount + ' 张图片', true); break; }
                 try {
-                    const dataUrl = await processImageFile(file);
-                    if (dataUrl) state[stateKey].push({ file, dataUrl });
+                    const item = await processImageFile(file);
+                    if (item) state[stateKey].push(item);
                 } catch (err) { showToast(err.message || '图片处理失败', true); }
             }
             renderPreviews();
@@ -259,15 +315,18 @@
     }
 
     
-    /** 图片画廊 HTML（点击新窗口查看原图）。 */
+    /** 图片画廊：列表用缩略图（秒开），点击新窗口打开高清原图。 */
     function renderImageGallery(images) {
         if (!images || images.length === 0) return '';
-        return '<div class="image-gallery">' +
-            images.slice(0, 9).map((u, i) =>
-                '<a class="image-gallery-item" href="' + escapeHtml(u) + '" target="_blank" rel="noopener noreferrer">' +
-                    '<img src="' + escapeHtml(u) + '" alt="图片 ' + (i + 1) + '" loading="lazy" onerror="this.hidden=true">' +
-                '</a>'
-            ).join('') +
+        const items = images.slice(0, 9).map((u, i) => {
+            const thumb = escapeHtml(thumbUrlOf(u));
+            const full = escapeHtml(u);
+            return '<a class="image-gallery-item" href="' + full + '" target="_blank" rel="noopener noreferrer" title="点击查看原图">' +
+                '<img src="' + thumb + '" alt="图片 ' + (i + 1) + '" loading="lazy" data-full="' + full + '" ' +
+                'onerror="var el=this;if(!el.dataset.fb){el.dataset.fb=1;el.src=el.dataset.full;}else{el.hidden=true;}">' +
+            '</a>';
+        }).join('');
+        return '<div class="image-gallery">' + items +
             (images.length > 9 ? '<span class="image-gallery-more">+' + (images.length - 9) + '</span>' : '') +
         '</div>';
     }

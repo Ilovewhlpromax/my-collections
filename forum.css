@@ -292,7 +292,7 @@
     border: 2px dashed var(--border);
     border-radius: 12px;
     background: #fafbfe;
-    min-height: 120px;
+    min-height: 150px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -323,8 +323,8 @@
 
 .image-upload-placeholder .upload-icon {
     display: block;
-    font-size: 1.8rem;
-    margin-bottom: 6px;
+    font-size: 2.3rem;
+    margin-bottom: 8px;
 }
 
 .image-upload-placeholder p {
@@ -350,12 +350,13 @@
 
 .image-preview-item {
     position: relative;
-    width: 96px;
-    height: 96px;
-    border-radius: 10px;
+    width: 112px;
+    height: 112px;
+    border-radius: 12px;
     overflow: hidden;
     border: 1px solid var(--border);
     background: #eef1f8;
+    box-shadow: 0 2px 8px rgba(31, 36, 48, 0.08);
     animation: cardIn 0.25s ease both;
 }
 
