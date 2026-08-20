@@ -14,7 +14,8 @@ const MAX_GIF_KEEP = 3 * 1024 * 1024;     // gifs kept as-is below this size
 
 const state = {
     editingId: null,
-    imageData: null    // data URL from the picked photo
+    imageData: null,      // data URL from the picked photo
+    pendingDeleteId: null // collection id awaiting modal confirmation
 };
 
 /* ---------- helpers ---------- */
@@ -221,11 +222,28 @@ function renderCollections() {
 
 /* ---------- actions ---------- */
 
-function handleDelete(id) {
-    if (!confirm('确定要删除这个收藏吗？')) return;
+/* Delete flow uses a custom in-page modal instead of window.confirm,
+   which is silently blocked in sandboxed/embedded contexts. */
+function openDeleteConfirm(id) {
+    state.pendingDeleteId = id;
+    document.getElementById('deleteModal').hidden = false;
+    document.getElementById('modalConfirm').focus();
+}
+
+function closeDeleteModal() {
+    state.pendingDeleteId = null;
+    document.getElementById('deleteModal').hidden = true;
+}
+
+function confirmDelete() {
+    const id = state.pendingDeleteId;
+    if (id == null) return;
+
     const collections = getCollections();
-    saveCollections(collections.filter((item) => item.id !== id));
+    saveCollections(collections.filter((item) => String(item.id) !== String(id)));
     if (state.editingId === id) cancelEdit();
+
+    closeDeleteModal();
     renderCollections();
 }
 
@@ -371,7 +389,17 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('collectionGrid').addEventListener('click', (e) => {
         const btn = e.target.closest('[data-action]');
         if (!btn) return;
-        if (btn.dataset.action === 'delete') handleDelete(btn.dataset.id);
+        if (btn.dataset.action === 'delete') openDeleteConfirm(btn.dataset.id);
         else if (btn.dataset.action === 'edit') startEdit(btn.dataset.id);
+    });
+
+    /* ---- delete-confirm modal ---- */
+    document.getElementById('modalCancel').addEventListener('click', closeDeleteModal);
+    document.getElementById('modalConfirm').addEventListener('click', confirmDelete);
+    document.getElementById('deleteModal').addEventListener('click', (e) => {
+        if (e.target === e.currentTarget) closeDeleteModal(); // click outside dialog
+    });
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && !document.getElementById('deleteModal').hidden) closeDeleteModal();
     });
 });
