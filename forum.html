@@ -79,8 +79,20 @@
                         <label for="topicContent">内容</label>
                         <textarea id="topicContent" rows="5" placeholder="分享你的收藏故事、疑问或心得…" required maxlength="5000"></textarea>
                     </div>
+                    <div class="form-group form-group-full">
+                        <label>图片（可选，最多 6 张）</label>
+                        <div class="image-upload-zone" id="topicImageZone" role="button" tabindex="0" aria-label="上传图片">
+                            <input type="file" id="topicImages" accept="image/*" multiple hidden>
+                            <div class="image-upload-placeholder" id="topicImagePlaceholder">
+                                <span class="upload-icon">🖼️</span>
+                                <p>点击选择图片（JPG / PNG / WebP / GIF）</p>
+                                <p class="upload-hint">自动压缩后上传到云端</p>
+                            </div>
+                            <div class="image-preview-grid" id="topicImagePreview"></div>
+                        </div>
+                    </div>
                 </div>
-                <button type="submit" class="btn-submit">发布</button>
+                <button type="submit" class="btn-submit" id="topicSubmitBtn">发布</button>
             </form>
         </section>
 
@@ -106,8 +118,20 @@
                             <label for="replyContent">回复内容</label>
                             <textarea id="replyContent" rows="3" placeholder="友善交流，理性讨论…" required maxlength="2000"></textarea>
                         </div>
+                        <div class="form-group form-group-full">
+                            <label>图片（可选，最多 4 张）</label>
+                            <div class="image-upload-zone" id="replyImageZone" role="button" tabindex="0" aria-label="上传图片">
+                                <input type="file" id="replyImages" accept="image/*" multiple hidden>
+                                <div class="image-upload-placeholder" id="replyImagePlaceholder">
+                                    <span class="upload-icon">🖼️</span>
+                                    <p>点击选择图片（JPG / PNG / WebP / GIF）</p>
+                                    <p class="upload-hint">自动压缩后上传到云端</p>
+                                </div>
+                                <div class="image-preview-grid" id="replyImagePreview"></div>
+                            </div>
+                        </div>
                     </div>
-                    <button type="submit" class="btn-submit">回复</button>
+                    <button type="submit" class="btn-submit" id="replySubmitBtn">回复</button>
                 </form>
             </div>
         </section>

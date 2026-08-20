@@ -17,8 +17,169 @@
         supabase: null,
         ready: false,
         currentCategory: 'all',
-        currentTopicId: null
+        currentTopicId: null,
+        topicImages: [],   // {file, dataUrl, preview}
+        replyImages: []
     };
+
+    /* ---------- 图片处理（压缩 + 上传 Supabase Storage） ---------- */
+
+    const MAX_IMAGES_TOPIC = 6;
+    const MAX_IMAGES_REPLY = 4;
+    const MAX_RAW_FILE = 15 * 1024 * 1024;   // 15 MB raw cap
+    const MAX_EDGE = 1600;                    // downscale long edge (px)
+    const JPEG_QUALITY = 0.82;
+    const MAX_GIF_KEEP = 3 * 1024 * 1024;
+
+    function readFileAsDataURL(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = () => reject(new Error('读取文件失败'));
+            reader.readAsDataURL(file);
+        });
+    }
+
+    function loadImage(src) {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.onload = () => resolve(img);
+            img.onerror = () => reject(new Error('无法解析该图片'));
+            img.src = src;
+        });
+    }
+
+    /** 压缩图片为 dataURL（GIF 小文件原样保留动画）。 */
+    async function processImageFile(file) {
+        if (!file.type.startsWith('image/')) {
+            showToast('请选择图片文件（JPG / PNG / WebP / GIF）', true);
+            return null;
+        }
+        if (file.size > MAX_RAW_FILE) {
+            showToast('图片过大（超过 15 MB）', true);
+            return null;
+        }
+        if (file.type === 'image/gif' && file.size <= MAX_GIF_KEEP) {
+            return await readFileAsDataURL(file);
+        }
+        const raw = await readFileAsDataURL(file);
+        const img = await loadImage(raw);
+        const scale = Math.min(1, MAX_EDGE / Math.max(img.naturalWidth, img.naturalHeight));
+        const w = Math.max(1, Math.round(img.naturalWidth * scale));
+        const h = Math.max(1, Math.round(img.naturalHeight * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        const format = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+        return canvas.toDataURL(format, JPEG_QUALITY);
+    }
+
+    function dataUrlToBlob(dataUrl) {
+        const [meta, b64] = dataUrl.split(',');
+        const mime = (meta.match(/data:(.*?);/) || [])[1] || 'image/jpeg';
+        const bin = atob(b64);
+        const arr = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+        return new Blob([arr], { type: mime });
+    }
+
+    /** 把暂存图片上传到 Supabase Storage，返回公开 URL 数组。 */
+    async function uploadImages(list) {
+        const urls = [];
+        for (const item of list) {
+            const ext = (item.file.type === 'image/png') ? 'png'
+                : (item.file.type === 'image/gif') ? 'gif' : 'jpg';
+            const name = Date.now() + '-' + Math.random().toString(36).slice(2, 10) + '.' + ext;
+            const blob = dataUrlToBlob(item.dataUrl);
+            const { error } = await state.supabase.storage
+                .from('forum-images')
+                .upload('forum/' + name, blob, {
+                    contentType: blob.type,
+                    cacheControl: '3600',
+                    upsert: false
+                });
+            if (error) throw error;
+            const { data: pub } = state.supabase.storage
+                .from('forum-images')
+                .getPublicUrl('forum/' + name);
+            urls.push(pub.publicUrl);
+        }
+        return urls;
+    }
+
+    /** 图片选择（多选）+ 预览渲染。 */
+    function bindImagePicker(inputId, zoneId, previewId, placeholderId, stateKey, maxCount) {
+        const input = $(inputId);
+        const zone = $(zoneId);
+        const preview = $(previewId);
+        const placeholder = $(placeholderId);
+
+        function renderPreviews() {
+            const list = state[stateKey];
+            preview.innerHTML = list.map((item, i) =>
+                '<div class="image-preview-item" data-index="' + i + '">' +
+                    '<img src="' + item.dataUrl + '" alt="预览图">' +
+                    '<button type="button" class="image-preview-remove" data-index="' + i + '" aria-label="移除图片">✕</button>' +
+                '</div>'
+            ).join('');
+            placeholder.hidden = list.length > 0;
+            zone.classList.toggle('has-images', list.length > 0);
+        }
+
+        zone.addEventListener('click', (e) => {
+            const rm = e.target.closest('.image-preview-remove');
+            if (rm) {
+                e.stopPropagation();
+                const idx = Number(rm.dataset.index);
+                state[stateKey].splice(idx, 1);
+                renderPreviews();
+                return;
+            }
+            if (!e.target.closest('.image-preview-item')) input.click();
+        });
+        zone.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); }
+        });
+        input.addEventListener('change', async () => {
+            const files = Array.from(input.files || []);
+            input.value = '';
+            for (const file of files) {
+                if (state[stateKey].length >= maxCount) {
+                    showToast('最多 ' + maxCount + ' 张图片', true);
+                    break;
+                }
+                try {
+                    const dataUrl = await processImageFile(file);
+                    if (dataUrl) state[stateKey].push({ file, dataUrl });
+                } catch (err) {
+                    showToast(err.message || '图片处理失败', true);
+                }
+            }
+            renderPreviews();
+        });
+        // drag & drop
+        ['dragover', 'dragenter'].forEach((evt) =>
+            zone.addEventListener(evt, (e) => { e.preventDefault(); zone.classList.add('dragover'); })
+        );
+        ['dragleave', 'drop'].forEach((evt) =>
+            zone.addEventListener(evt, (e) => { e.preventDefault(); zone.classList.remove('dragover'); })
+        );
+        zone.addEventListener('drop', async (e) => {
+            const files = Array.from(e.dataTransfer.files || []).filter(f => f.type.startsWith('image/'));
+            for (const file of files) {
+                if (state[stateKey].length >= maxCount) { showToast('最多 ' + maxCount + ' 张图片', true); break; }
+                try {
+                    const dataUrl = await processImageFile(file);
+                    if (dataUrl) state[stateKey].push({ file, dataUrl });
+                } catch (err) { showToast(err.message || '图片处理失败', true); }
+            }
+            renderPreviews();
+        });
+
+        return renderPreviews;
+    }
 
     /* ---------- 工具 ---------- */
 
@@ -95,6 +256,20 @@
 
         state.supabase = window.supabase.createClient(url, key);
         state.ready = true;
+    }
+
+    
+    /** 图片画廊 HTML（点击新窗口查看原图）。 */
+    function renderImageGallery(images) {
+        if (!images || images.length === 0) return '';
+        return '<div class="image-gallery">' +
+            images.slice(0, 9).map((u, i) =>
+                '<a class="image-gallery-item" href="' + escapeHtml(u) + '" target="_blank" rel="noopener noreferrer">' +
+                    '<img src="' + escapeHtml(u) + '" alt="图片 ' + (i + 1) + '" loading="lazy" onerror="this.hidden=true">' +
+                '</a>'
+            ).join('') +
+            (images.length > 9 ? '<span class="image-gallery-more">+' + (images.length - 9) + '</span>' : '') +
+        '</div>';
     }
 
     /* ---------- 帖子列表 ---------- */
@@ -174,12 +349,17 @@
             return;
         }
 
-        const btn = e.target.querySelector('button[type="submit"]');
+        const btn = $('topicSubmitBtn');
         btn.disabled = true;
+        btn.textContent = '上传中…';
         try {
+            let images = [];
+            if (state.topicImages.length > 0) {
+                images = await uploadImages(state.topicImages);
+            }
             const { data, error } = await state.supabase
                 .from('forum_topics')
-                .insert({ nickname, category, title, content })
+                .insert({ nickname, category, title, content, images })
                 .select('id')
                 .single();
             if (error) throw error;
@@ -187,6 +367,8 @@
             setNickname(nickname);
             showToast('发布成功 🎉');
             e.target.reset();
+            state.topicImages = [];
+            renderTopicImagePreviews();
             showView('list');
             await loadTopics();
         } catch (err) {
@@ -194,6 +376,7 @@
             showToast('发布失败：' + (err.message || '未知错误'), true);
         } finally {
             btn.disabled = false;
+            btn.textContent = '发布';
         }
     }
 
@@ -225,6 +408,7 @@
                 .order('created_at', { ascending: true });
             if (replyErr) throw replyErr;
 
+            const topicImages = Array.isArray(topic.images) ? topic.images : [];
             detail.innerHTML =
                 '<h2>' + escapeHtml(topic.title) + '</h2>' +
                 '<div class="topic-meta">' +
@@ -232,7 +416,8 @@
                     '<span>👤 ' + escapeHtml(topic.nickname) + '</span>' +
                     '<span>🕒 ' + formatDateTime(topic.created_at) + '</span>' +
                 '</div>' +
-                '<div class="topic-body">' + escapeHtml(topic.content) + '</div>';
+                '<div class="topic-body">' + escapeHtml(topic.content) + '</div>' +
+                renderImageGallery(topicImages);
 
             const list = replyData || [];
             $('replyCount').textContent = String(list.length);
@@ -240,15 +425,17 @@
             if (list.length === 0) {
                 replies.innerHTML = '<div class="empty-topic"><span class="empty-icon">🫧</span>暂无回复，抢个沙发！</div>';
             } else {
-                replies.innerHTML = list.map((r) =>
-                    '<div class="reply-item">' +
+                replies.innerHTML = list.map((r) => {
+                    const rImages = Array.isArray(r.images) ? r.images : [];
+                    return '<div class="reply-item">' +
                         '<div class="reply-meta">' +
                             '<span class="reply-nickname">👤 ' + escapeHtml(r.nickname) + '</span>' +
                             '<span>🕒 ' + formatDateTime(r.created_at) + '</span>' +
                         '</div>' +
                         '<div class="reply-content">' + escapeHtml(r.content) + '</div>' +
-                    '</div>'
-                ).join('');
+                        renderImageGallery(rImages) +
+                    '</div>';
+                }).join('');
             }
 
             // 预填昵称
@@ -273,23 +460,31 @@
             return;
         }
 
-        const btn = e.target.querySelector('button[type="submit"]');
+        const btn = $('replySubmitBtn');
         btn.disabled = true;
+        btn.textContent = '上传中…';
         try {
+            let images = [];
+            if (state.replyImages.length > 0) {
+                images = await uploadImages(state.replyImages);
+            }
             const { error } = await state.supabase
                 .from('forum_replies')
-                .insert({ topic_id: state.currentTopicId, nickname, content });
+                .insert({ topic_id: state.currentTopicId, nickname, content, images });
             if (error) throw error;
 
             setNickname(nickname);
             showToast('回复成功 🎉');
             e.target.reset();
+            state.replyImages = [];
+            renderReplyImagePreviews();
             await openTopic(state.currentTopicId);
         } catch (err) {
             console.error('submitReply failed:', err);
             showToast('回复失败：' + (err.message || '未知错误'), true);
         } finally {
             btn.disabled = false;
+            btn.textContent = '回复';
         }
     }
 
@@ -341,6 +536,14 @@
     }
 
     /* ---------- 启动 ---------- */
+
+    // 图片选择器（绑定后返回渲染函数供表单重置时调用）
+    const renderTopicImagePreviews = bindImagePicker(
+        'topicImages', 'topicImageZone', 'topicImagePreview', 'topicImagePlaceholder', 'topicImages', MAX_IMAGES_TOPIC
+    );
+    const renderReplyImagePreviews = bindImagePicker(
+        'replyImages', 'replyImageZone', 'replyImagePreview', 'replyImagePlaceholder', 'replyImages', MAX_IMAGES_REPLY
+    );
 
     document.addEventListener('DOMContentLoaded', () => {
         initSupabase();

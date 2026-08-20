@@ -64,3 +64,25 @@ create policy "forum_replies_select_anon" on public.forum_replies
 
 create policy "forum_replies_insert_anon" on public.forum_replies
     for insert with check (true);
+
+-- ============================================================
+-- 图片上传（Supabase Storage）
+-- ============================================================
+
+-- 帖子/回复增加图片 URL 数组列
+alter table public.forum_topics
+    add column if not exists images text[] not null default '{}';
+
+alter table public.forum_replies
+    add column if not exists images text[] not null default '{}';
+
+-- 公开图片桶（通过 CDN 公开读取）
+insert into storage.buckets (id, name, public)
+values ('forum-images', 'forum-images', true)
+on conflict (id) do update set public = true;
+
+-- 允许匿名用户上传图片到该桶
+drop policy if exists "forum_images_upload_anon" on storage.objects;
+create policy "forum_images_upload_anon" on storage.objects
+    for insert to anon
+    with check (bucket_id = 'forum-images');
