@@ -165,61 +165,61 @@ function clearImage() {
 
 /* ---------- rendering ---------- */
 
+/** The placeholder block that always occupies the first grid slot, so the
+    exhibition area is never empty — deleting the last item can never leave
+    a stale card behind, because the grid is fully rebuilt from scratch. */
+function placeholderBlock(collections, filtered) {
+    let sub;
+    if (collections.length === 0) sub = '暂无收藏，点击这里开始';
+    else if (filtered.length === 0) sub = '没有匹配的收藏，点击仍可添加';
+    else sub = '点击添加新的美好瞬间';
+
+    return `
+    <button type="button" class="placeholder-card" data-action="add" aria-label="添加新收藏">
+        <span class="placeholder-icon">＋</span>
+        <span class="placeholder-title">添加新收藏</span>
+        <span class="placeholder-sub">${sub}</span>
+    </button>`;
+}
+
+function cardBlock(item) {
+    const safeName = escapeHtml(item.name);
+    const safeDesc = escapeHtml(item.description || '暂无描述');
+    const safeImage = escapeHtml(item.image);
+    const imgBlock = safeImage
+        ? `<img src="${safeImage}" alt="${safeName}" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'img-fallback',textContent:'🖼️'}))">`
+        : '<div class="img-fallback">🖼️</div>';
+    return `
+    <article class="collection-card" data-id="${escapeHtml(item.id)}">
+        <div class="card-image">${imgBlock}</div>
+        <div class="card-content">
+            <div class="card-meta">
+                <span class="card-category cat-${escapeHtml(item.category)}">${getCategoryName(item.category)}</span>
+                ${item.createdAt ? `<span class="card-date">${formatDate(item.createdAt)}</span>` : ''}
+            </div>
+            <h3 class="card-title">${safeName}</h3>
+            <p class="card-description">${safeDesc}</p>
+            <div class="card-actions">
+                <button class="btn-edit" data-action="edit" data-id="${escapeHtml(item.id)}">编辑</button>
+                <button class="btn-delete" data-action="delete" data-id="${escapeHtml(item.id)}">删除</button>
+            </div>
+        </div>
+    </article>`;
+}
+
 function renderCollections() {
     const collections = getCollections();
     const grid = document.getElementById('collectionGrid');
-    const emptyState = document.getElementById('emptyState');
-    const emptyTitle = document.getElementById('emptyTitle');
-    const emptyText = document.getElementById('emptyText');
 
     updateStats(collections);
 
     const filtered = filterCollections(collections);
 
-    if (filtered.length === 0) {
-        // Destroy the box: clear every card so nothing lingers when empty.
-        grid.innerHTML = '';
-        grid.hidden = true;
-        emptyState.hidden = false;
-        if (collections.length === 0) {
-            emptyTitle.textContent = '暂无收藏';
-            emptyText.textContent = '添加您的第一个收藏吧！';
-        } else {
-            emptyTitle.textContent = '没有匹配的收藏';
-            emptyText.textContent = '试试更换筛选分类或搜索关键词';
-        }
-        return;
-    }
-
-    grid.hidden = false;
-    emptyState.hidden = true;
-
-    grid.innerHTML = filtered
-        .map((item) => {
-            const safeName = escapeHtml(item.name);
-            const safeDesc = escapeHtml(item.description || '暂无描述');
-            const safeImage = escapeHtml(item.image);
-            const imgBlock = safeImage
-                ? `<img src="${safeImage}" alt="${safeName}" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'img-fallback',textContent:'🖼️'}))">`
-                : '<div class="img-fallback">🖼️</div>';
-            return `
-            <article class="collection-card" data-id="${escapeHtml(item.id)}">
-                <div class="card-image">${imgBlock}</div>
-                <div class="card-content">
-                    <div class="card-meta">
-                        <span class="card-category cat-${escapeHtml(item.category)}">${getCategoryName(item.category)}</span>
-                        ${item.createdAt ? `<span class="card-date">${formatDate(item.createdAt)}</span>` : ''}
-                    </div>
-                    <h3 class="card-title">${safeName}</h3>
-                    <p class="card-description">${safeDesc}</p>
-                    <div class="card-actions">
-                        <button class="btn-edit" data-action="edit" data-id="${escapeHtml(item.id)}">编辑</button>
-                        <button class="btn-delete" data-action="delete" data-id="${escapeHtml(item.id)}">删除</button>
-                    </div>
-                </div>
-            </article>`;
-        })
-        .join('');
+    // Placeholder first, then the matching cards (or nothing). The grid is
+    // never hidden and never kept around: innerHTML is rebuilt every time.
+    grid.innerHTML =
+        placeholderBlock(collections, filtered) +
+        filtered.map(cardBlock).join('');
 }
 
 /* ---------- actions ---------- */
@@ -387,12 +387,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('searchInput').addEventListener('input', renderCollections);
 
-    // Event delegation for card buttons (edit / delete)
+    // Event delegation for card buttons (edit / delete / add placeholder)
     document.getElementById('collectionGrid').addEventListener('click', (e) => {
         const btn = e.target.closest('[data-action]');
         if (!btn) return;
         if (btn.dataset.action === 'delete') openDeleteConfirm(btn.dataset.id);
         else if (btn.dataset.action === 'edit') startEdit(btn.dataset.id);
+        else if (btn.dataset.action === 'add') {
+            document.getElementById('addForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
+            document.getElementById('name').focus();
+        }
     });
 
     /* ---- delete-confirm modal ---- */

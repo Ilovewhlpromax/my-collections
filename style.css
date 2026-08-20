@@ -360,6 +360,48 @@ main {
     margin-bottom: 28px;
 }
 
+/* ---- Placeholder card (always first grid slot) ---- */
+.placeholder-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 240px;
+    padding: 24px;
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    background: rgba(255, 255, 255, 0.45);
+    color: var(--text-soft);
+    cursor: pointer;
+    font-family: inherit;
+    transition: border-color 0.2s, background 0.2s, transform 0.2s;
+    animation: cardIn 0.35s ease both;
+}
+
+.placeholder-card:hover {
+    border-color: var(--primary);
+    background: rgba(255, 255, 255, 0.72);
+    color: var(--primary);
+    transform: translateY(-4px);
+}
+
+.placeholder-icon {
+    font-size: 2.6rem;
+    line-height: 1;
+    font-weight: 300;
+}
+
+.placeholder-title {
+    font-size: 1.05rem;
+    font-weight: 600;
+}
+
+.placeholder-sub {
+    font-size: 0.82rem;
+    opacity: 0.75;
+}
+
 .collection-card {
     background: var(--card-bg);
     border-radius: var(--radius);
