@@ -42,9 +42,23 @@
                         <label for="description">描述</label>
                         <textarea id="description" placeholder="输入收藏描述" rows="2" maxlength="300"></textarea>
                     </div>
+
                     <div class="form-group form-group-full">
-                        <label for="image">图片URL</label>
-                        <input type="url" id="image" placeholder="输入图片链接（可选）">
+                        <label>照片</label>
+                        <div class="upload-zone" id="uploadZone" role="button" tabindex="0" aria-label="上传照片">
+                            <input type="file" id="imageFile" accept="image/*" hidden>
+                            <div class="upload-placeholder" id="uploadPlaceholder">
+                                <span class="upload-icon">📷</span>
+                                <p>点击选择照片，或将图片拖到此处</p>
+                                <p class="upload-hint">支持 JPG / PNG / WebP / GIF，自动压缩后保存在本机浏览器</p>
+                            </div>
+                            <img id="imagePreview" class="upload-preview" hidden alt="照片预览">
+                            <button type="button" class="btn-remove-image" id="removeImage" hidden>✕ 移除照片</button>
+                        </div>
+                        <div class="url-fallback">
+                            <label for="imageUrl" class="url-label">或输入图片链接（可选）</label>
+                            <input type="url" id="imageUrl" placeholder="https://example.com/photo.jpg">
+                        </div>
                     </div>
                 </div>
                 <button type="submit" id="submitBtn">添加收藏</button>
