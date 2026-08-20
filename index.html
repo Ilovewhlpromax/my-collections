@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="我的收藏展览 - 记录生活中的美好瞬间">
+    <meta name="theme-color" content="#667eea">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎨</text></svg>">
+    <title>我的收藏展览</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <h1>🎨 我的收藏展览</h1>
+        <p>记录生活中的美好瞬间</p>
+        <div class="header-stats" id="statCount">共 0 件收藏</div>
+    </header>
+
+    <main>
+        <section class="panel add-section" aria-labelledby="formTitle">
+            <div class="panel-head">
+                <h2 id="formTitle">添加新收藏</h2>
+                <button type="button" class="btn-cancel-edit" id="cancelEdit" hidden>取消编辑</button>
+            </div>
+            <form id="addForm">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="name">名称</label>
+                        <input type="text" id="name" placeholder="输入收藏名称" required maxlength="60">
+                    </div>
+                    <div class="form-group">
+                        <label for="category">分类</label>
+                        <select id="category">
+                            <option value="art">艺术品</option>
+                            <option value="book">书籍</option>
+                            <option value="travel">旅行</option>
+                            <option value="music">音乐</option>
+                            <option value="other">其他</option>
+                        </select>
+                    </div>
+                    <div class="form-group form-group-full">
+                        <label for="description">描述</label>
+                        <textarea id="description" placeholder="输入收藏描述" rows="2" maxlength="300"></textarea>
+                    </div>
+                    <div class="form-group form-group-full">
+                        <label for="image">图片URL</label>
+                        <input type="url" id="image" placeholder="输入图片链接（可选）">
+                    </div>
+                </div>
+                <button type="submit" id="submitBtn">添加收藏</button>
+            </form>
+        </section>
+
+        <section class="panel filter-section" aria-label="筛选与搜索">
+            <div class="filter-row">
+                <div class="search-box">
+                    <span class="search-icon" aria-hidden="true">🔍</span>
+                    <input type="search" id="searchInput" placeholder="搜索名称或描述…" autocomplete="off">
+                </div>
+                <div class="filter-buttons" role="tablist" aria-label="分类筛选">
+                    <button class="filter-btn active" data-category="all" role="tab" aria-selected="true">全部</button>
+                    <button class="filter-btn" data-category="art" role="tab" aria-selected="false">艺术品</button>
+                    <button class="filter-btn" data-category="book" role="tab" aria-selected="false">书籍</button>
+                    <button class="filter-btn" data-category="travel" role="tab" aria-selected="false">旅行</button>
+                    <button class="filter-btn" data-category="music" role="tab" aria-selected="false">音乐</button>
+                    <button class="filter-btn" data-category="other" role="tab" aria-selected="false">其他</button>
+                </div>
+            </div>
+        </section>
+
+        <div class="collection-grid" id="collectionGrid" aria-live="polite"></div>
+
+        <div class="empty-state" id="emptyState" hidden>
+            <div class="empty-icon">📭</div>
+            <h3 id="emptyTitle">暂无收藏</h3>
+            <p id="emptyText">添加您的第一个收藏吧！</p>
+        </div>
+    </main>
+
+    <footer>
+        <p>© 2024 我的收藏展览 | 数据保存在浏览器 localStorage</p>
+    </footer>
+
+    <script src="script.js" defer></script>
+</body>
+</html>
