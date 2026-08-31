@@ -1,7 +1,9 @@
 # ============================================================
 # Supabase keepalive (PowerShell + curl.exe)
 # Rhythm: 2 requests every 3 days -> ping every 36 hours
-# Scheduled hourly; only pings when due.
+# Activity: REST query + Auth ping via curl.exe
+# Per official docs, a few DB requests per week prevent the
+# free-tier 7-day inactivity pause. 36h cadence is ample.
 # ============================================================
 $ErrorActionPreference = "SilentlyContinue"
 
@@ -34,7 +36,7 @@ if (-not $anon) {
     exit 1
 }
 
-# ---- curl keepalive requests ----
+# ---- curl keepalive requests (real DB read + auth ping) ----
 $restUrl = "$url/rest/v1/forum_topics?select=id&limit=1"
 $code1 = & curl.exe -s -o NUL -w "%{http_code}" -H "apikey: $anon" -H "Authorization: Bearer $anon" $restUrl
 $code2 = & curl.exe -s -o NUL -w "%{http_code}" "$url/auth/v1/health"
