@@ -5,6 +5,7 @@
 # Per official docs, a few DB requests per week prevent the
 # free-tier 7-day inactivity pause. 36h cadence is ample.
 # ============================================================
+param([switch]$Force)
 $ErrorActionPreference = "SilentlyContinue"
 
 $dir = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -18,8 +19,10 @@ if (Test-Path $stampFile) {
     $last = [int64](Get-Content $stampFile -Raw)
 }
 
-if (($now - $last) -lt ($intervalHours * 3600)) {
-    exit 0   # not due yet (hourly calls mostly exit here)
+if (-not $Force) {
+    if (($now - $last) -lt ($intervalHours * 3600)) {
+        exit 0   # not due yet (hourly calls mostly exit here)
+    }
 }
 
 # ---- read config.js (url + anon key) ----
